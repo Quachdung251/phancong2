@@ -13,6 +13,14 @@ export interface Prosecutor {
   updated_at: string;
 }
 
+export interface Leader {
+  id: string;
+  name: string;
+  cases_this_year: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Case {
   id: string;
   case_number: string;
@@ -21,6 +29,7 @@ export interface Case {
   law_articles: string;
   defendants_count: number;
   assigned_prosecutor_id?: string;
+  assigned_leader_id?: string;
   status: 'Chờ phân công' | 'Đang giải quyết' | 'Hoàn thành' | 'Tạm đình chỉ';
   description?: string;
   created_at: string;

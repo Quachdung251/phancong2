@@ -8,12 +8,16 @@ import {
   Menu,
   X,
   Upload,
-  Download
+  Download,
+  UserCheck,
+  ClipboardList
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import ProsecutorManagement from './components/ProsecutorManagement';
 import CaseAssignment from './components/CaseAssignment';
-import type { Prosecutor, Case, AssignmentHistory } from './types';
+import LeaderManagement from './components/LeaderManagement';
+import CaseAssignmentTable from './components/CaseAssignmentTable';
+import type { Prosecutor, Case, AssignmentHistory, Leader } from './types';
 import { localStorage, exportData, importData } from './lib/supabase';
 
 // Mock data để demo
@@ -63,6 +67,24 @@ const generateMockProsecutors = (): Prosecutor[] => {
 
 const mockProsecutors: Prosecutor[] = generateMockProsecutors();
 
+// Mock data cho lãnh đạo viện
+const generateMockLeaders = (): Leader[] => {
+  const leaderNames = [
+    'Nguyễn Văn Toàn', 'Trần Thị Minh', 'Lê Đình Hùng', 'Phạm Quốc Anh',
+    'Hoàng Thu Hương', 'Vũ Minh Đức', 'Đặng Thị Lan', 'Bùi Văn Thành'
+  ];
+  
+  return leaderNames.map((name, index) => ({
+    id: (index + 1).toString(),
+    name,
+    cases_this_year: Math.floor(Math.random() * 25) + 5, // 5-30 vụ án
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: new Date().toISOString()
+  }));
+};
+
+const mockLeaders: Leader[] = generateMockLeaders();
+
 const mockCases: Case[] = [
   {
     id: '1',
@@ -94,6 +116,7 @@ function App() {
   const [prosecutors, setProsecutors] = useState<Prosecutor[]>(mockProsecutors);
   const [cases, setCases] = useState<Case[]>(mockCases);
   const [assignments, setAssignments] = useState<AssignmentHistory[]>([]);
+  const [leaders, setLeaders] = useState<Leader[]>(mockLeaders);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -197,6 +220,63 @@ function App() {
     }
   };
 
+  // Leader management functions
+  const handleAddLeader = (leaderData: Omit<Leader, 'id' | 'created_at' | 'updated_at'>) => {
+    const newLeader: Leader = {
+      ...leaderData,
+      id: Date.now().toString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    setLeaders(prev => [...prev, newLeader]);
+  };
+
+  const handleUpdateLeader = (id: string, updates: Partial<Leader>) => {
+    setLeaders(prev => prev.map(leader => 
+      leader.id === id 
+        ? { ...leader, ...updates, updated_at: new Date().toISOString() }
+        : leader
+    ));
+  };
+
+  const handleDeleteLeader = (id: string) => {
+    setLeaders(prev => prev.filter(leader => leader.id !== id));
+  };
+
+  // Case assignment table functions
+  const handleCaseAssignment = (caseData: {
+    case_name: string;
+    law_articles: string;
+    defendants_count: number;
+    assigned_leader_id: string;
+    case_type: 'Hình sự' | 'Dân sự' | 'Hành chính' | 'Kinh tế';
+  }) => {
+    // Tạo case number tự động
+    const caseNumber = `${String(cases.length + 1).padStart(3, '0')}/2024/VKSND-TP`;
+    
+    const newCase: Case = {
+      id: Date.now().toString(),
+      case_number: caseNumber,
+      case_name: caseData.case_name,
+      case_type: caseData.case_type,
+      law_articles: caseData.law_articles,
+      defendants_count: caseData.defendants_count,
+      assigned_leader_id: caseData.assigned_leader_id,
+      status: 'Chờ phân công',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    setCases(prev => [...prev, newCase]);
+    
+    // Cập nhật số vụ án của lãnh đạo
+    setLeaders(prev => prev.map(leader => 
+      leader.id === caseData.assigned_leader_id
+        ? { ...leader, cases_this_year: leader.cases_this_year + 1, updated_at: new Date().toISOString() }
+        : leader
+    ));
+  };
+
   const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -218,7 +298,9 @@ function App() {
   const menuItems = [
     { id: 'dashboard', name: 'Bảng Điều Khiển', icon: BarChart3 },
     { id: 'prosecutors', name: 'Quản Lý Cán Bộ', icon: Users },
+    { id: 'leaders', name: 'Quản Lý Lãnh Đạo', icon: UserCheck },
     { id: 'assignment', name: 'Phân Công Án', icon: Scale },
+    { id: 'case-assignment', name: 'Bảng Phân Công', icon: ClipboardList },
     { id: 'settings', name: 'Cài Đặt', icon: Settings },
   ];
 
@@ -235,6 +317,15 @@ function App() {
             onDelete={handleDeleteProsecutor}
           />
         );
+      case 'leaders':
+        return (
+          <LeaderManagement
+            leaders={leaders}
+            onAddLeader={handleAddLeader}
+            onUpdateLeader={handleUpdateLeader}
+            onDeleteLeader={handleDeleteLeader}
+          />
+        );
       case 'assignment':
         return (
           <CaseAssignment
@@ -242,6 +333,14 @@ function App() {
             cases={cases}
             onAssignCase={handleAssignCase}
             onAddCase={handleAddCase}
+          />
+        );
+      case 'case-assignment':
+        return (
+          <CaseAssignmentTable
+            leaders={leaders}
+            prosecutors={prosecutors}
+            onAssignCase={handleCaseAssignment}
           />
         );
       case 'settings':
