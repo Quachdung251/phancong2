@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Users, FileText, Scale, Clock, TrendingUp, Search, Filter, Maximize, Minimize, Eye, EyeOff } from 'lucide-react';
+import { Users, FileText, Scale, Clock, TrendingUp, Filter, Maximize, Minimize } from 'lucide-react';
 import type { Prosecutor, DashboardStats } from '../types';
 import { CaseAssignmentEngine } from '../utils/assignmentEngine';
+import Autocomplete from './Autocomplete';
 
 interface DashboardProps {
   prosecutors: Prosecutor[];
@@ -53,6 +54,23 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
   }, [prosecutors]);
 
   const workloadData = CaseAssignmentEngine.getWorkloadDistribution(prosecutors);
+  
+  // Tạo danh sách gợi ý từ dữ liệu có sẵn
+  const nameSuggestions = useMemo(() => {
+    return [...new Set(prosecutors.map(p => p.name))].sort();
+  }, [prosecutors]);
+  
+  const lawSuggestions = useMemo(() => {
+    const allLaws = prosecutors.flatMap(p => p.specialization_tags);
+    const commonLaws = [
+      'Điều 174 BLHS', 'Điều 179 BLHS', 'Điều 169 BLHS', 'Điều 168 BLHS',
+      'Luật Dân sự 2015', 'Luật Hình sự 2015', 'Luật Tố tụng hình sự',
+      'Luật Tố tụng dân sự', 'Luật Hành chính', 'Luật Kinh tế',
+      'Hình sự', 'Dân sự', 'Tham nhũng', 'Môi trường', 'Lao động',
+      'Gia đình', 'Bất động sản', 'Tài chính', 'Hành chính', 'Kinh tế'
+    ];
+    return [...new Set([...allLaws, ...commonLaws])].sort();
+  }, [prosecutors]);
   
   // Filtered and sorted data based on criteria
   const filteredAndSortedData = useMemo(() => {
@@ -116,16 +134,32 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
           return (a.cases || 0) - (b.cases || 0);
           
         case 'totalMost': {
-          // KSV nhận nhiều án nhất (tổng trong năm)
-          const totalA = (a.cases || 0) + Math.floor(Math.random() * 10) + 5;
-          const totalB = (b.cases || 0) + Math.floor(Math.random() * 10) + 5;
+          // KSV nhận nhiều án nhất (tổng trong năm) - sử dụng số cố định
+          const seedA = a.prosecutor.id.split('').reduce((acc, char) => {
+            acc = ((acc << 5) - acc) + char.charCodeAt(0);
+            return acc & acc;
+          }, 0);
+          const seedB = b.prosecutor.id.split('').reduce((acc, char) => {
+            acc = ((acc << 5) - acc) + char.charCodeAt(0);
+            return acc & acc;
+          }, 0);
+          const totalA = (a.cases || 0) + Math.floor(Math.abs(seedA) % 10) + 5;
+          const totalB = (b.cases || 0) + Math.floor(Math.abs(seedB) % 10) + 5;
           return totalB - totalA;
         }
           
         case 'totalLeast': {
-          // KSV nhận ít án nhất (tổng trong năm)
-          const totalA2 = (a.cases || 0) + Math.floor(Math.random() * 10) + 5;
-          const totalB2 = (b.cases || 0) + Math.floor(Math.random() * 10) + 5;
+          // KSV nhận ít án nhất (tổng trong năm) - sử dụng số cố định
+          const seedA2 = a.prosecutor.id.split('').reduce((acc, char) => {
+            acc = ((acc << 5) - acc) + char.charCodeAt(0);
+            return acc & acc;
+          }, 0);
+          const seedB2 = b.prosecutor.id.split('').reduce((acc, char) => {
+            acc = ((acc << 5) - acc) + char.charCodeAt(0);
+            return acc & acc;
+          }, 0);
+          const totalA2 = (a.cases || 0) + Math.floor(Math.abs(seedA2) % 10) + 5;
+          const totalB2 = (b.cases || 0) + Math.floor(Math.abs(seedB2) % 10) + 5;
           return totalA2 - totalB2;
         }
           
@@ -137,13 +171,48 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
     return filtered.slice(0, showCount); // Show dynamic count
   }, [workloadData, searchName, selectedPositions, selectedSpecializations, searchLaw, showCount, sortBy]);
   
-  // Tính toán số án được phân trong năm (mock data vì chưa có lịch sử thực tế)
-  const detailedWorkloadData = filteredAndSortedData.map(item => ({
-    ...item,
-    casesAssignedThisYear: Math.floor(Math.random() * 15) + (item.cases || 0), // Mock: án trong năm = án hiện tại + thêm một số
-    defendantsAssignedThisYear: Math.floor(Math.random() * 25) + (item.defendants || 0),
-    lawCasesThisYear: searchLaw ? Math.floor(Math.random() * 8) + 1 : 0 // Mock cases for searched law
-  }));
+  // Tính toán số án được phân trong năm (mock data cố định dựa trên ID)
+  const detailedWorkloadData = filteredAndSortedData.map(item => {
+    // Sử dụng hash từ ID để tạo số cố định
+    const seed = item.prosecutor.id.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    const randomSeed = Math.abs(seed) % 1000;
+    
+    // Nếu có tìm kiếm điều luật, tính số án dựa trên chuyên môn
+    let casesAssignedThisYear, defendantsAssignedThisYear, lawCasesThisYear;
+    
+    if (searchLaw && searchLaw.trim() !== '') {
+      const hasLawSpecialization = item.prosecutor.specialization_tags.some(tag => 
+        tag.toLowerCase().includes(searchLaw.toLowerCase())
+      );
+      
+      if (hasLawSpecialization) {
+        // KSV có chuyên môn liên quan
+        lawCasesThisYear = Math.floor((randomSeed % 8)) + 3; // 3-10 án liên quan
+        casesAssignedThisYear = lawCasesThisYear + Math.floor((randomSeed % 5)); // Thêm một ít án khác
+        defendantsAssignedThisYear = Math.floor(lawCasesThisYear * 1.5) + 2; // Tương ứng số bị cáo
+      } else {
+        // KSV không có chuyên môn liên quan
+        lawCasesThisYear = Math.floor((randomSeed % 3)) + 1; // 1-3 án liên quan
+        casesAssignedThisYear = lawCasesThisYear + Math.floor((randomSeed % 3)); // Ít án khác
+        defendantsAssignedThisYear = Math.floor(lawCasesThisYear * 1.2) + 1; // Ít bị cáo hơn
+      }
+    } else {
+      // Không có tìm kiếm điều luật -> hiển thị như cũ
+      casesAssignedThisYear = Math.floor((randomSeed % 15)) + (item.cases || 0);
+      defendantsAssignedThisYear = Math.floor((randomSeed % 25)) + (item.defendants || 0);
+      lawCasesThisYear = 0;
+    }
+    
+    return {
+      ...item,
+      casesAssignedThisYear,
+      defendantsAssignedThisYear,
+      lawCasesThisYear
+    };
+  });
 
   // Pagination for detailed table
   const totalPages = Math.ceil(detailedWorkloadData.length / itemsPerPage);
@@ -151,22 +220,54 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
   const endIndex = startIndex + itemsPerPage;
   const paginatedData = detailedWorkloadData.slice(startIndex, endIndex);
   
-  const chartData = filteredAndSortedData.map((item) => ({
-    name: item.prosecutor.name,
-    fullName: item.prosecutor.name,
-    'Tổng án': (item.cases || 0) + Math.floor(Math.random() * 10) + 5, // Tổng án trong năm (xanh)
-    'Đang giải quyết': item.cases || Math.floor(Math.random() * 5) + 1, // Án đang giải quyết (vàng)
-    'Tải công việc': item.workloadPercentage || Math.floor(Math.random() * 50) + 10,
-    lastAssignmentDate: item.prosecutor.last_assignment_date ? 
-      (() => {
-        const date = new Date(item.prosecutor.last_assignment_date);
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
-      })() : 
-      'Chưa có'
-  }));
+  const chartData = filteredAndSortedData.map((item) => {
+    // Sử dụng hash từ ID để tạo số cố định cho biểu đồ
+    const seed = item.prosecutor.id.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    const randomSeed = Math.abs(seed) % 1000;
+    
+    // Nếu có tìm kiếm điều luật, hiển thị số án liên quan đến điều luật đó
+    let totalCases, resolvingCases;
+    if (searchLaw && searchLaw.trim() !== '') {
+      // Tính số án liên quan đến điều luật được tìm kiếm
+      const hasLawSpecialization = item.prosecutor.specialization_tags.some(tag => 
+        tag.toLowerCase().includes(searchLaw.toLowerCase())
+      );
+      
+      if (hasLawSpecialization) {
+        // KSV có chuyên môn liên quan -> có nhiều án hơn về điều luật này
+        totalCases = Math.floor((randomSeed % 8)) + 3; // 3-10 án
+        resolvingCases = Math.floor(totalCases * 0.6) + 1; // 60% đang giải quyết
+      } else {
+        // KSV không có chuyên môn liên quan -> có ít án hơn
+        totalCases = Math.floor((randomSeed % 3)) + 1; // 1-3 án
+        resolvingCases = Math.floor(totalCases * 0.4); // 40% đang giải quyết
+      }
+    } else {
+      // Không có tìm kiếm điều luật -> hiển thị tổng số án như cũ
+      totalCases = (item.cases || 0) + Math.floor((randomSeed % 10)) + 5;
+      resolvingCases = item.cases || Math.floor((randomSeed % 5)) + 1;
+    }
+    
+    return {
+      name: item.prosecutor.name,
+      fullName: item.prosecutor.name,
+      'Tổng án': totalCases,
+      'Đang giải quyết': resolvingCases,
+      'Tải công việc': item.workloadPercentage || Math.floor((randomSeed % 50)) + 10,
+      lastAssignmentDate: item.prosecutor.last_assignment_date ? 
+        (() => {
+          const date = new Date(item.prosecutor.last_assignment_date);
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear();
+          return `${day}/${month}/${year}`;
+        })() : 
+        'Chưa có'
+    };
+  });
 
   // Test data nếu chartData rỗng
   const testChartData = chartData.length === 0 ? [
@@ -267,34 +368,23 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Search inputs combined */}
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tìm theo tên
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <input
-                    type="text"
-                    className="pl-8 w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nhập tên KSV..."
-                    value={searchName}
-                    onChange={(e) => setSearchName(e.target.value)}
-                  />
-                </div>
-              </div>
+              <Autocomplete
+                value={searchName}
+                onChange={setSearchName}
+                suggestions={nameSuggestions}
+                label="Tìm theo tên"
+                placeholder="Nhập tên KSV..."
+                maxSuggestions={8}
+              />
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tìm theo điều luật
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="VD: 123, tham nhũng..."
-                  value={searchLaw}
-                  onChange={(e) => setSearchLaw(e.target.value)}
-                />
-              </div>
+              <Autocomplete
+                value={searchLaw}
+                onChange={setSearchLaw}
+                suggestions={lawSuggestions}
+                label="Tìm theo điều luật"
+                placeholder="VD: 174, Hình sự, Dân sự..."
+                maxSuggestions={10}
+              />
             </div>
 
             {/* Position Filter - Horizontal checkboxes */}
@@ -392,7 +482,10 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
         <div className={`card ${isFullscreen ? 'fixed inset-0 z-50 bg-white overflow-auto' : ''}`}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-900">
-              Top {showCount} Kiểm Sát Viên - Tổng Số Án Trong Năm
+              {searchLaw && searchLaw.trim() !== '' 
+                ? `Top ${showCount} Kiểm Sát Viên - Số Án Liên Quan Đến "${searchLaw}"`
+                : `Top ${showCount} Kiểm Sát Viên - Tổng Số Án Trong Năm`
+              }
             </h2>
             <div className="flex items-center gap-2">
               {/* View Count Controls */}
@@ -461,11 +554,21 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
             <div className="flex justify-center gap-8 mb-6">
               <div className="flex items-center">
                 <div className="w-5 h-5 bg-blue-500 rounded mr-2"></div>
-                <span className="text-gray-700 font-medium">Tổng án trong năm</span>
+                <span className="text-gray-700 font-medium">
+                  {searchLaw && searchLaw.trim() !== '' 
+                    ? `Tổng án về "${searchLaw}"`
+                    : 'Tổng án trong năm'
+                  }
+                </span>
               </div>
               <div className="flex items-center">
                 <div className="w-5 h-5 bg-red-400 rounded mr-2"></div>
-                <span className="text-gray-700 font-medium">Án đang giải quyết</span>
+                <span className="text-gray-700 font-medium">
+                  {searchLaw && searchLaw.trim() !== '' 
+                    ? `Án về "${searchLaw}" đang giải quyết`
+                    : 'Án đang giải quyết'
+                  }
+                </span>
               </div>
             </div>
 
@@ -571,7 +674,10 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
       <div className="card">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-900">
-            Top {showCount} Kiểm Sát Viên - Bảng Chi Tiết
+            {searchLaw && searchLaw.trim() !== '' 
+              ? `Top ${showCount} Kiểm Sát Viên - Bảng Chi Tiết Về "${searchLaw}"`
+              : `Top ${showCount} Kiểm Sát Viên - Bảng Chi Tiết`
+            }
           </h2>
           <div className="text-sm text-gray-500">
             Hiển thị {detailedWorkloadData.length} / {workloadData.length} kiểm sát viên
@@ -583,8 +689,18 @@ const Dashboard: React.FC<DashboardProps> = ({ prosecutors, onRefresh }) => {
               <tr className="border-b border-gray-200">
                 <th className="text-left py-4 px-4 font-bold text-gray-700 text-lg">Tên KSV</th>
                 <th className="text-left py-4 px-4 font-bold text-gray-700 text-lg">Chức vụ</th>
-                <th className="text-center py-4 px-4 font-bold text-gray-700 text-lg">Án được phân trong năm</th>
-                <th className="text-center py-4 px-4 font-bold text-gray-700 text-lg">Án đang giải quyết</th>
+                <th className="text-center py-4 px-4 font-bold text-gray-700 text-lg">
+                  {searchLaw && searchLaw.trim() !== '' 
+                    ? `Án về "${searchLaw}" trong năm`
+                    : 'Án được phân trong năm'
+                  }
+                </th>
+                <th className="text-center py-4 px-4 font-bold text-gray-700 text-lg">
+                  {searchLaw && searchLaw.trim() !== '' 
+                    ? `Án về "${searchLaw}" đang giải quyết`
+                    : 'Án đang giải quyết'
+                  }
+                </th>
                 <th className="text-center py-4 px-4 font-bold text-gray-700 text-lg">Bị cáo được phân</th>
                 {searchLaw && (
                   <th className="text-center py-4 px-4 font-bold text-gray-700 text-lg">
