@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Minus, FileText, Users, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, Users, AlertCircle, CheckCircle } from 'lucide-react';
 import type { Leader, Prosecutor } from '../types';
 
 interface CaseAssignmentTableProps {
@@ -19,7 +19,10 @@ const CaseAssignmentTable: React.FC<CaseAssignmentTableProps> = ({
   prosecutors,
   onAssignCase
 }) => {
-  const [defendantsCount, setDefendantsCount] = useState(1);
+  const [increaseCases, setIncreaseCases] = useState(1);
+  const [decreaseCases, setDecreaseCases] = useState(0);
+  const [increaseDefendants, setIncreaseDefendants] = useState(0);
+  const [decreaseDefendants, setDecreaseDefendants] = useState(0);
   const [caseData, setCaseData] = useState<{
     case_name: string;
     law_articles: string;
@@ -33,18 +36,32 @@ const CaseAssignmentTable: React.FC<CaseAssignmentTableProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastAssignment, setLastAssignment] = useState<string | null>(null);
 
-  const handleDefendantsChange = (change: number) => {
-    const newCount = defendantsCount + change;
-    if (newCount >= 1) {
-      setDefendantsCount(newCount);
+
+  const handleCasesChange = (action: 'increase' | 'decrease', type: 'increase' | 'decrease') => {
+    if (type === 'increase') {
+      if (action === 'increase') {
+        setIncreaseCases(prev => prev + 1);
+      } else {
+        setIncreaseCases(prev => Math.max(1, prev - 1));
+      }
+    } else {
+      if (action === 'increase') {
+        setDecreaseCases(prev => prev + 1);
+      } else {
+        setDecreaseCases(prev => Math.max(0, prev - 1));
+      }
     }
   };
+
+  // Tính tổng số vụ và bị cáo
+  const totalCases = increaseCases + decreaseCases;
+  const totalDefendants = increaseDefendants + decreaseDefendants;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!caseData.case_name.trim() || !caseData.law_articles.trim() || !selectedLeaderId) {
-      alert('Vui lòng điền đầy đủ thông tin!');
+    if (!selectedLeaderId) {
+      alert('Vui lòng chọn lãnh đạo phụ trách!');
       return;
     }
 
@@ -52,8 +69,10 @@ const CaseAssignmentTable: React.FC<CaseAssignmentTableProps> = ({
     
     try {
       const assignmentData = {
-        ...caseData,
-        defendants_count: defendantsCount,
+        case_name: caseData.case_name.trim() || `Vụ án ${totalCases} vụ, ${totalDefendants} bị cáo`,
+        law_articles: caseData.law_articles.trim() || 'Chưa xác định',
+        case_type: caseData.case_type,
+        defendants_count: totalDefendants,
         assigned_leader_id: selectedLeaderId
       };
       
@@ -65,7 +84,10 @@ const CaseAssignmentTable: React.FC<CaseAssignmentTableProps> = ({
         law_articles: '',
         case_type: 'Hình sự'
       });
-      setDefendantsCount(1);
+      setIncreaseDefendants(0);
+      setDecreaseDefendants(0);
+      setIncreaseCases(1);
+      setDecreaseCases(0);
       setSelectedLeaderId('');
       
       // Hiển thị thông báo thành công
@@ -106,79 +128,166 @@ const CaseAssignmentTable: React.FC<CaseAssignmentTableProps> = ({
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* PHẦN 1: Tăng/Giảm Án */}
+          {/* Cột 1: Quản lý số vụ/bị cáo */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-              1. Số Lượng Bị Cáo
+              Quản lý số vụ/bị cáo
             </h3>
             
-            <div className="bg-gray-50 rounded-lg p-6">
-              <div className="flex items-center justify-center space-x-6">
-                <button
-                  type="button"
-                  onClick={() => handleDefendantsChange(-1)}
-                  disabled={defendantsCount <= 1}
-                  className="w-12 h-12 rounded-full bg-red-100 hover:bg-red-200 disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
-                >
-                  <Minus className="h-6 w-6 text-red-600" />
-                </button>
-                
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-gray-900">{defendantsCount}</div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    {defendantsCount === 1 ? 'bị cáo' : 'bị cáo'}
+            {/* Dòng 1: Tăng số vụ/bị cáo */}
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <h4 className="font-medium text-green-800 mb-3">Tăng số vụ/bị cáo</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-green-700 mb-2">
+                    Số vụ án
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCasesChange('increase', 'increase')}
+                      className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      +
+                    </button>
+                    <span className="bg-white px-3 py-2 border border-green-300 rounded-lg min-w-[60px] text-center">
+                      {increaseCases}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCasesChange('decrease', 'increase')}
+                      className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition-colors"
+                      disabled={increaseCases <= 1}
+                    >
+                      -
+                    </button>
                   </div>
                 </div>
                 
-                <button
-                  type="button"
-                  onClick={() => handleDefendantsChange(1)}
-                  className="w-12 h-12 rounded-full bg-green-100 hover:bg-green-200 flex items-center justify-center transition-colors"
-                >
-                  <Plus className="h-6 w-6 text-green-600" />
-                </button>
+                <div>
+                  <label className="block text-sm font-medium text-green-700 mb-2">
+                    Số bị cáo
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={increaseDefendants}
+                      onChange={(e) => setIncreaseDefendants(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="bg-white px-3 py-2 border border-green-300 rounded-lg min-w-[60px] text-center focus:border-green-500 focus:ring-green-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIncreaseDefendants(prev => prev + 1)}
+                      className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
-              
-              <div className="mt-4 text-center">
-                <div className="text-xs text-gray-500">
-                  Tối thiểu: 1 bị cáo
+            </div>
+            
+            {/* Dòng 2: Giảm số vụ/bị cáo */}
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <h4 className="font-medium text-red-800 mb-3">Giảm số vụ/bị cáo</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-red-700 mb-2">
+                    Số vụ án
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCasesChange('decrease', 'decrease')}
+                      className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition-colors"
+                      disabled={decreaseCases <= 0}
+                    >
+                      -
+                    </button>
+                    <span className="bg-white px-3 py-2 border border-red-300 rounded-lg min-w-[60px] text-center">
+                      {decreaseCases}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCasesChange('increase', 'decrease')}
+                      className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-red-700 mb-2">
+                    Số bị cáo
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={decreaseDefendants}
+                      onChange={(e) => setDecreaseDefendants(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="bg-white px-3 py-2 border border-red-300 rounded-lg min-w-[60px] text-center focus:border-red-500 focus:ring-red-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setDecreaseDefendants(prev => prev + 1)}
+                      className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Hiển thị tổng */}
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <h4 className="font-medium text-blue-800 mb-2">Tổng kết</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-900">{totalCases}</div>
+                  <div className="text-blue-700">Tổng vụ án</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-900">{totalDefendants}</div>
+                  <div className="text-blue-700">Tổng bị cáo</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* PHẦN 2: Tên Vụ Án & Điều Luật */}
+          {/* Cột 2: Thông tin vụ án (Optional) */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-              2. Thông Tin Vụ Án
+              Thông tin vụ án <span className="text-sm text-gray-500 font-normal">(Tùy chọn)</span>
             </h3>
             
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tên vụ án *
+                  Tên vụ án
                 </label>
                 <textarea
                   className="input-field text-lg resize-none"
                   rows={3}
-                  placeholder="Nhập tên vụ án..."
+                  placeholder="Nhập tên vụ án (tùy chọn)..."
                   value={caseData.case_name}
                   onChange={(e) => setCaseData({ ...caseData, case_name: e.target.value })}
-                  required
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Điều luật áp dụng *
+                  Điều luật áp dụng
                 </label>
                 <input
                   type="text"
                   className="input-field text-lg"
-                  placeholder="VD: Điều 174 BLHS, Luật Dân sự 2015..."
+                  placeholder="VD: Điều 174 BLHS, Luật Dân sự 2015... (tùy chọn)"
                   value={caseData.law_articles}
                   onChange={(e) => setCaseData({ ...caseData, law_articles: e.target.value })}
-                  required
                 />
               </div>
               
@@ -200,80 +309,83 @@ const CaseAssignmentTable: React.FC<CaseAssignmentTableProps> = ({
             </div>
           </div>
 
-          {/* PHẦN 3: Chọn Lãnh Đạo */}
+          {/* Cột 3: Lãnh đạo viện */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-              3. Chọn Lãnh Đạo Viện
+              Chọn lãnh đạo viện
             </h3>
             
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Lãnh đạo phụ trách *
-                </label>
-                <select
-                  className="input-field text-lg"
-                  value={selectedLeaderId}
-                  onChange={(e) => setSelectedLeaderId(e.target.value)}
-                  required
-                >
-                  <option value="">-- Chọn lãnh đạo --</option>
+              {/* Danh sách lãnh đạo - có thể click để chọn */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Danh sách lãnh đạo ({leaders.length}) - Click để chọn
+                </h4>
+                <div className="space-y-2">
                   {leaders
-                    .sort((a, b) => a.cases_this_year - b.cases_this_year) // Sắp xếp theo số án ít nhất
+                    .sort((a, b) => a.cases_this_year - b.cases_this_year)
                     .map(leader => (
-                      <option key={leader.id} value={leader.id}>
-                        {leader.name} ({leader.cases_this_year} vụ)
-                      </option>
-                    ))}
-                </select>
-              </div>
-              
-              {/* Thông tin lãnh đạo được chọn */}
-              {selectedLeader && (
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-blue-900 mb-3">Thông Tin Lãnh Đạo</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-blue-700">Tên:</span>
-                      <span className="font-medium text-blue-900">{selectedLeader.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-blue-700">Số vụ từ đầu năm:</span>
-                      <span className="font-bold text-blue-900">{selectedLeader.cases_this_year} vụ</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-blue-700">Sau khi phân công:</span>
-                      <span className="font-bold text-green-600">{selectedLeader.cases_this_year + 1} vụ</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Thống kê tổng quan lãnh đạo */}
-              {leaders.length > 0 && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3">Tổng Quan Lãnh Đạo</h4>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {leaders
-                      .sort((a, b) => a.cases_this_year - b.cases_this_year)
-                      .map(leader => (
-                        <div key={leader.id} className="flex justify-between items-center py-1">
-                          <span className="text-gray-700 text-sm">{leader.name}</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-blue-600 h-2 rounded-full" 
-                                style={{ 
-                                  width: `${leaders.length > 0 ? (leader.cases_this_year / Math.max(...leaders.map(l => l.cases_this_year), 1)) * 100 : 0}%` 
-                                }}
-                              ></div>
-                            </div>
-                            <span className="text-sm font-medium text-gray-900 w-8 text-right">
-                              {leader.cases_this_year}
-                            </span>
+                      <div 
+                        key={leader.id} 
+                        className={`flex justify-between items-center py-3 px-4 rounded-lg cursor-pointer transition-all duration-200 ${
+                          selectedLeaderId === leader.id 
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105' 
+                            : 'bg-white hover:bg-gradient-to-r hover:from-blue-100 hover:to-indigo-100 border border-blue-200 hover:border-blue-300 shadow-sm hover:shadow-md'
+                        }`}
+                        onClick={() => setSelectedLeaderId(leader.id)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${
+                            selectedLeaderId === leader.id ? 'bg-white' : 'bg-blue-400'
+                          }`}></div>
+                          <span className={`font-medium ${
+                            selectedLeaderId === leader.id ? 'text-white' : 'text-gray-700'
+                          }`}>
+                            {leader.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-sm font-bold px-2 py-1 rounded-full ${
+                            selectedLeaderId === leader.id 
+                              ? 'bg-white text-blue-600' 
+                              : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            {leader.cases_this_year} vụ
+                          </span>
+                          <div className="w-20 bg-gray-200 rounded-full h-3">
+                            <div 
+                              className={`h-3 rounded-full transition-all duration-300 ${
+                                selectedLeaderId === leader.id 
+                                  ? 'bg-white' 
+                                  : 'bg-gradient-to-r from-blue-400 to-blue-500'
+                              }`}
+                              style={{
+                                width: `${Math.min(100, (leader.cases_this_year / Math.max(...leaders.map(l => l.cases_this_year), 1)) * 100)}%`
+                              }}
+                            ></div>
                           </div>
                         </div>
-                      ))}
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Hiển thị thông tin ngắn gọn về lãnh đạo được chọn */}
+              {selectedLeader && (
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-4 border border-emerald-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 bg-emerald-500 rounded-full"></div>
+                      <span className="font-semibold text-emerald-800">
+                        Đã chọn: {selectedLeader.name}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-emerald-600">
+                        {selectedLeader.cases_this_year} → <span className="font-bold text-emerald-700">{selectedLeader.cases_this_year + totalCases}</span> vụ
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -291,7 +403,7 @@ const CaseAssignmentTable: React.FC<CaseAssignmentTableProps> = ({
             
             <button
               type="submit"
-              disabled={isSubmitting || !caseData.case_name.trim() || !caseData.law_articles.trim() || !selectedLeaderId}
+              disabled={isSubmitting || !selectedLeaderId}
               className="btn-primary flex items-center gap-2 px-8 py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
